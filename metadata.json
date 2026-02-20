@@ -1,0 +1,5 @@
+{
+  "name": "Gestor de Revisões de Quadriciclos",
+  "description": "Controle e agendamento de revisões periódicas para quadriciclos com base na data de compra.",
+  "requestFramePermissions": []
+}
