@@ -16,7 +16,9 @@ export default function App() {
 
   // Review completion modal state
   const [completingReview, setCompletingReview] = useState<{ quadId: string, reviewId: number } | null>(null);
+  const [refusingReview, setRefusingReview] = useState<{ quadId: string, reviewId: number } | null>(null);
   const [tempObservation, setTempObservation] = useState('');
+  const [tempRefusalReason, setTempRefusalReason] = useState('');
   const [tempResponsible, setTempResponsible] = useState('');
   const [tempKm, setTempKm] = useState('');
 
@@ -82,6 +84,12 @@ export default function App() {
     setTempKm('');
   };
 
+  const startRefusingReview = (quadId: string, reviewId: number) => {
+    setRefusingReview({ quadId, reviewId });
+    setTempRefusalReason('');
+    setTempResponsible('');
+  };
+
   const handleCompleteReview = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!completingReview) return;
@@ -92,6 +100,7 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           isCompleted: true,
+          isRefused: false,
           observation: tempObservation,
           responsible: tempResponsible,
           km: tempKm
@@ -105,7 +114,7 @@ export default function App() {
               ...q,
               reviews: q.reviews.map(r => 
                 r.id === completingReview.reviewId 
-                  ? { ...r, isCompleted: true, observation: tempObservation, responsible: tempResponsible, km: tempKm } 
+                  ? { ...r, isCompleted: true, isRefused: false, observation: tempObservation, responsible: tempResponsible, km: tempKm } 
                   : r
               )
             };
@@ -119,6 +128,43 @@ export default function App() {
     }
   };
 
+  const handleRefuseReview = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!refusingReview) return;
+
+    try {
+      const response = await fetch(`/api/quadricycles/${refusingReview.quadId}/reviews/${refusingReview.reviewId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          isCompleted: false,
+          isRefused: true,
+          refusalReason: tempRefusalReason,
+          responsible: tempResponsible
+        }),
+      });
+
+      if (response.ok) {
+        setQuads(quads.map(q => {
+          if (q.id === refusingReview.quadId) {
+            return {
+              ...q,
+              reviews: q.reviews.map(r => 
+                r.id === refusingReview.reviewId 
+                  ? { ...r, isCompleted: false, isRefused: true, refusalReason: tempRefusalReason, responsible: tempResponsible } 
+                  : r
+              )
+            };
+          }
+          return q;
+        }));
+        setRefusingReview(null);
+      }
+    } catch (error) {
+      console.error('Failed to refuse review:', error);
+    }
+  };
+
   const toggleReviewOff = async (quadId: string, reviewId: number) => {
     try {
       const response = await fetch(`/api/quadricycles/${quadId}/reviews/${reviewId}`, {
@@ -126,7 +172,9 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           isCompleted: false,
+          isRefused: false,
           observation: null,
+          refusalReason: null,
           responsible: null,
           km: null
         }),
@@ -138,7 +186,7 @@ export default function App() {
             return {
               ...q,
               reviews: q.reviews.map(r => 
-                r.id === reviewId ? { ...r, isCompleted: false, observation: undefined, responsible: undefined, km: undefined } : r
+                r.id === reviewId ? { ...r, isCompleted: false, isRefused: false, observation: undefined, refusalReason: undefined, responsible: undefined, km: undefined } : r
               )
             };
           }
@@ -420,6 +468,62 @@ export default function App() {
           )}
         </AnimatePresence>
 
+        {/* Refusal Modal */}
+        <AnimatePresence>
+          {refusingReview && (
+            <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md"
+              >
+                <h2 className="text-xl font-bold mb-4 text-slate-900">Recusar Revisão</h2>
+                <form onSubmit={handleRefuseReview} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-1.5">Responsável pelo Atendimento</label>
+                    <input
+                      autoFocus
+                      type="text"
+                      required
+                      value={tempResponsible}
+                      onChange={(e) => setTempResponsible(e.target.value)}
+                      placeholder="Nome do responsável"
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-1.5">Motivo da Recusa</label>
+                    <textarea
+                      required
+                      value={tempRefusalReason}
+                      onChange={(e) => setTempRefusalReason(e.target.value)}
+                      placeholder="Descreva o motivo da recusa pelo cliente..."
+                      rows={3}
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all resize-none"
+                    />
+                  </div>
+                  <div className="flex gap-3 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setRefusingReview(null)}
+                      className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 transition-all font-semibold text-slate-600"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="submit"
+                      className="flex-1 bg-rose-600 hover:bg-rose-700 text-white px-4 py-2.5 rounded-xl transition-all shadow-md font-semibold"
+                    >
+                      Confirmar Recusa
+                    </button>
+                  </div>
+                </form>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
         {/* List */}
         <div className="space-y-8">
           {isLoading ? (
@@ -451,7 +555,7 @@ export default function App() {
             </div>
           ) : (
             filteredQuads.map((quad) => {
-              const allReviewsCompleted = quad.reviews.every(r => r.isCompleted);
+              const allReviewsCompleted = quad.reviews.every(r => r.isCompleted || r.isRefused);
               
               return (
                 <motion.div
@@ -533,26 +637,36 @@ export default function App() {
 
                   <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-6">
                     {quad.reviews.map((review) => {
-                      const status = getStatus(review.scheduledDate, review.isCompleted);
+                      const status = getStatus(review.scheduledDate, review.isCompleted || review.isRefused);
+                      const isDone = review.isCompleted || review.isRefused;
+                      
                       return (
                         <div
                           key={review.id}
                           className={`relative p-5 rounded-2xl border transition-all flex flex-col h-full ${
                             review.isCompleted 
                               ? 'bg-emerald-50/30 border-emerald-100' 
-                              : status === 'overdue'
+                              : review.isRefused
                                 ? 'bg-rose-50/30 border-rose-100'
-                                : 'bg-slate-50/50 border-slate-100'
+                                : status === 'overdue'
+                                  ? 'bg-rose-50/30 border-rose-100'
+                                  : 'bg-slate-50/50 border-slate-100'
                           }`}
                         >
                           <div className="flex justify-between items-start mb-4">
                             <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-md ${
-                              review.isCompleted ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'
+                              review.isCompleted 
+                                ? 'bg-emerald-100 text-emerald-700' 
+                                : review.isRefused
+                                  ? 'bg-rose-100 text-rose-700'
+                                  : 'bg-slate-100 text-slate-500'
                             }`}>
                               {review.label}
                             </span>
                             {review.isCompleted ? (
                               <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+                            ) : review.isRefused ? (
+                              <AlertCircle className="w-5 h-5 text-rose-500" />
                             ) : status === 'overdue' ? (
                               <AlertCircle className="w-5 h-5 text-rose-500 animate-pulse" />
                             ) : (
@@ -568,24 +682,32 @@ export default function App() {
                               {review.daysFromPrevious} dias após {review.id === 1 ? 'a compra' : 'revisão anterior'}
                             </div>
 
-                            {review.isCompleted && (
-                              <div className="mt-4 pt-4 border-t border-emerald-100/50 space-y-2">
+                            {isDone && (
+                              <div className={`mt-4 pt-4 border-t space-y-2 ${
+                                review.isCompleted ? 'border-emerald-100/50' : 'border-rose-100/50'
+                              }`}>
                                 {review.responsible && (
-                                  <div className="text-[10px] text-emerald-700">
+                                  <div className={`text-[10px] ${review.isCompleted ? 'text-emerald-700' : 'text-rose-700'}`}>
                                     <span className="font-bold uppercase opacity-60">Responsável:</span>
                                     <p className="font-semibold">{review.responsible}</p>
                                   </div>
                                 )}
-                                {review.km && (
+                                {review.km && review.isCompleted && (
                                   <div className="text-[10px] text-emerald-700">
                                     <span className="font-bold uppercase opacity-60">KM:</span>
                                     <p className="font-semibold">{review.km}</p>
                                   </div>
                                 )}
-                                {review.observation && (
+                                {review.observation && review.isCompleted && (
                                   <div className="text-[10px] text-emerald-700">
                                     <span className="font-bold uppercase opacity-60">Obs:</span>
                                     <p className="italic leading-relaxed">{review.observation}</p>
+                                  </div>
+                                )}
+                                {review.refusalReason && review.isRefused && (
+                                  <div className="text-[10px] text-rose-700">
+                                    <span className="font-bold uppercase opacity-60">Motivo da Recusa:</span>
+                                    <p className="italic leading-relaxed font-medium">{review.refusalReason}</p>
                                   </div>
                                 )}
                               </div>
@@ -595,7 +717,7 @@ export default function App() {
                           <div className="space-y-2">
                             {quad.status === 'active' && (
                               <>
-                                {!review.isCompleted && (
+                                {!isDone && (
                                   <button
                                     onClick={() => sendWhatsappMessage(quad, review)}
                                     className="w-full py-2 px-3 rounded-xl text-xs font-bold bg-white border border-emerald-200 text-emerald-600 hover:bg-emerald-50 transition-all flex items-center justify-center gap-2"
@@ -603,24 +725,42 @@ export default function App() {
                                     <MessageCircle className="w-3.5 h-3.5" /> Notificar Cliente
                                   </button>
                                 )}
-                                <button
-                                  onClick={() => review.isCompleted 
-                                    ? toggleReviewOff(quad.id, review.id) 
-                                    : startCompletingReview(quad.id, review.id)
-                                  }
-                                  className={`w-full py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${
-                                    review.isCompleted
-                                      ? 'bg-emerald-500 text-white shadow-sm hover:bg-emerald-600'
-                                      : 'bg-slate-900 text-white hover:bg-slate-800'
-                                  }`}
-                                >
-                                  {review.isCompleted ? 'Revisão Realizada' : 'Concluir Revisão'}
-                                </button>
+                                <div className="flex gap-2">
+                                  {!isDone ? (
+                                    <>
+                                      <button
+                                        onClick={() => startRefusingReview(quad.id, review.id)}
+                                        className="flex-1 py-2.5 px-3 rounded-xl text-[10px] font-bold bg-white border border-rose-200 text-rose-600 hover:bg-rose-50 transition-all"
+                                      >
+                                        Recusar
+                                      </button>
+                                      <button
+                                        onClick={() => startCompletingReview(quad.id, review.id)}
+                                        className="flex-[2] py-2.5 px-3 rounded-xl text-[10px] font-bold bg-slate-900 text-white hover:bg-slate-800 transition-all"
+                                      >
+                                        Concluir
+                                      </button>
+                                    </>
+                                  ) : (
+                                    <button
+                                      onClick={() => toggleReviewOff(quad.id, review.id)}
+                                      className={`w-full py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                                        review.isCompleted
+                                          ? 'bg-emerald-500 text-white shadow-sm hover:bg-emerald-600'
+                                          : 'bg-rose-500 text-white shadow-sm hover:bg-rose-600'
+                                      }`}
+                                    >
+                                      {review.isCompleted ? 'Revisão Realizada' : 'Revisão Recusada'}
+                                    </button>
+                                  )}
+                                </div>
                               </>
                             )}
                             {quad.status === 'completed' && (
-                              <div className="text-center py-2 text-[10px] font-bold text-emerald-600 uppercase tracking-widest">
-                                Finalizada
+                              <div className={`text-center py-2 text-[10px] font-bold uppercase tracking-widest ${
+                                review.isCompleted ? 'text-emerald-600' : 'text-rose-600'
+                              }`}>
+                                {review.isCompleted ? 'Finalizada' : 'Recusada'}
                               </div>
                             )}
                           </div>

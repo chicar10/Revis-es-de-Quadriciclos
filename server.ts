@@ -24,8 +24,10 @@ db.exec(`
     label TEXT,
     scheduledDate TEXT,
     isCompleted INTEGER,
+    isRefused INTEGER DEFAULT 0,
     daysFromPrevious INTEGER,
     observation TEXT,
+    refusalReason TEXT,
     responsible TEXT,
     km TEXT,
     FOREIGN KEY(quadId) REFERENCES quadricycles(id) ON DELETE CASCADE
@@ -48,7 +50,8 @@ async function startServer() {
         reviews: reviews.map((r: any) => ({
           ...r,
           id: r.reviewNumber, // Using reviewNumber as the ID for frontend compatibility
-          isCompleted: !!r.isCompleted
+          isCompleted: !!r.isCompleted,
+          isRefused: !!r.isRefused
         }))
       };
     });
@@ -61,9 +64,9 @@ async function startServer() {
     const insertQuad = db.prepare('INSERT INTO quadricycles (id, model, purchaseDate, clientName, whatsapp, status) VALUES (?, ?, ?, ?, ?, ?)');
     insertQuad.run(id, model, purchaseDate, clientName, whatsapp, status);
 
-    const insertReview = db.prepare('INSERT INTO reviews (quadId, reviewNumber, label, scheduledDate, isCompleted, daysFromPrevious) VALUES (?, ?, ?, ?, ?, ?)');
+    const insertReview = db.prepare('INSERT INTO reviews (quadId, reviewNumber, label, scheduledDate, isCompleted, isRefused, daysFromPrevious) VALUES (?, ?, ?, ?, ?, ?, ?)');
     for (const r of reviews) {
-      insertReview.run(id, r.id, r.label, r.scheduledDate, r.isCompleted ? 1 : 0, r.daysFromPrevious);
+      insertReview.run(id, r.id, r.label, r.scheduledDate, r.isCompleted ? 1 : 0, r.isRefused ? 1 : 0, r.daysFromPrevious);
     }
 
     res.status(201).json({ status: 'ok' });
@@ -81,12 +84,21 @@ async function startServer() {
   });
 
   app.put('/api/quadricycles/:quadId/reviews/:reviewNumber', (req, res) => {
-    const { isCompleted, observation, responsible, km } = req.body;
+    const { isCompleted, isRefused, observation, refusalReason, responsible, km } = req.body;
     db.prepare(`
       UPDATE reviews 
-      SET isCompleted = ?, observation = ?, responsible = ?, km = ? 
+      SET isCompleted = ?, isRefused = ?, observation = ?, refusalReason = ?, responsible = ?, km = ? 
       WHERE quadId = ? AND reviewNumber = ?
-    `).run(isCompleted ? 1 : 0, observation || null, responsible || null, km || null, req.params.quadId, req.params.reviewNumber);
+    `).run(
+      isCompleted ? 1 : 0, 
+      isRefused ? 1 : 0, 
+      observation || null, 
+      refusalReason || null, 
+      responsible || null, 
+      km || null, 
+      req.params.quadId, 
+      req.params.reviewNumber
+    );
     res.json({ status: 'ok' });
   });
 

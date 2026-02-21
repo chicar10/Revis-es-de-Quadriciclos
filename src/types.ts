@@ -3,8 +3,10 @@ export interface Review {
   label: string;
   scheduledDate: string;
   isCompleted: boolean;
+  isRefused?: boolean;
   daysFromPrevious: number;
   observation?: string;
+  refusalReason?: string;
   responsible?: string;
   km?: string;
 }
