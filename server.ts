@@ -12,6 +12,7 @@ const dbPath = path.resolve(__dirname, 'database.sqlite');
 console.log('Using database at:', dbPath);
 
 const db = new Database(dbPath);
+db.pragma('journal_mode = WAL');
 
 // Initialize database
 db.exec(`

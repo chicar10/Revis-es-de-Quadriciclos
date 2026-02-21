@@ -153,9 +153,13 @@ export default function App() {
           return q;
         }));
         setCompletingReview(null);
+      } else {
+        const errorData = await response.json();
+        alert('Erro ao concluir revisão: ' + (errorData.error || 'Erro desconhecido'));
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to complete review:', error);
+      alert('Erro de conexão ao concluir revisão.');
     }
   };
 
@@ -190,9 +194,13 @@ export default function App() {
           return q;
         }));
         setRefusingReview(null);
+      } else {
+        const errorData = await response.json();
+        alert('Erro ao recusar revisão: ' + (errorData.error || 'Erro desconhecido'));
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to refuse review:', error);
+      alert('Erro de conexão ao recusar revisão.');
     }
   };
 
@@ -223,9 +231,13 @@ export default function App() {
           }
           return q;
         }));
+      } else {
+        const errorData = await response.json();
+        alert('Erro ao desfazer revisão: ' + (errorData.error || 'Erro desconhecido'));
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to toggle review off:', error);
+      alert('Erro de conexão ao desfazer revisão.');
     }
   };
 
@@ -241,9 +253,13 @@ export default function App() {
         if (response.ok) {
           setQuads(quads.map(q => q.id === id ? { ...q, status: 'completed' } : q));
           setActiveTab('completed');
+        } else {
+          const errorData = await response.json();
+          alert('Erro ao finalizar ciclo: ' + (errorData.error || 'Erro desconhecido'));
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Failed to finalize cycle:', error);
+        alert('Erro de conexão ao finalizar ciclo.');
       }
     }
   };
@@ -259,9 +275,13 @@ export default function App() {
       if (response.ok) {
         setQuads(quads.map(q => q.id === id ? { ...q, status: 'active' } : q));
         setActiveTab('active');
+      } else {
+        const errorData = await response.json();
+        alert('Erro ao reativar ciclo: ' + (errorData.error || 'Erro desconhecido'));
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to reactivate cycle:', error);
+      alert('Erro de conexão ao reativar ciclo.');
     }
   };
 
@@ -274,9 +294,13 @@ export default function App() {
 
         if (response.ok) {
           setQuads(quads.filter(q => q.id !== id));
+        } else {
+          const errorData = await response.json();
+          alert('Erro ao excluir registro: ' + (errorData.error || 'Erro desconhecido'));
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Failed to delete quadricycle:', error);
+        alert('Erro de conexão ao excluir registro.');
       }
     }
   };
