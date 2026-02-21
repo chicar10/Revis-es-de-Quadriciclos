@@ -30,9 +30,17 @@ export default function App() {
       if (response.ok) {
         const data = await response.json();
         setQuads(data);
+        // Sync to local storage as backup
+        localStorage.setItem('quadricycles_backup', JSON.stringify(data));
+      } else {
+        throw new Error('API returned ' + response.status);
       }
     } catch (error) {
-      console.error('Failed to fetch data:', error);
+      console.error('Failed to fetch data from API, trying backup:', error);
+      const saved = localStorage.getItem('quadricycles_backup');
+      if (saved) {
+        setQuads(JSON.parse(saved));
+      }
     } finally {
       setIsLoading(false);
     }
@@ -60,8 +68,11 @@ export default function App() {
       status: 'active',
     };
 
+    // Optimistic update
+    const previousQuads = [...quads];
+    setQuads([newQuad, ...quads]);
+
     try {
-      console.log('Sending new quad to API:', newQuad);
       const response = await fetch('/api/quadricycles', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -69,21 +80,31 @@ export default function App() {
       });
 
       if (response.ok) {
-        setQuads([newQuad, ...quads]);
         setNewModel('');
         setNewDate('');
         setNewClientName('');
         setNewWhatsapp('');
         setIsAdding(false);
         setActiveTab('active');
+        // Update backup
+        localStorage.setItem('quadricycles_backup', JSON.stringify([newQuad, ...quads]));
       } else {
         const errorData = await response.json();
-        console.error('API error:', errorData);
-        alert('Erro ao salvar: ' + (errorData.error || 'Erro desconhecido'));
+        throw new Error(errorData.error || 'Erro no servidor');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to add quadricycle:', error);
-      alert('Erro de conexão ao salvar registro.');
+      // Rollback optimistic update if it's a real failure
+      // But for now, let's just warn the user that it might not have saved to the cloud
+      alert('Aviso: Não foi possível salvar no banco de dados central (' + error.message + '). O registro foi salvo temporariamente no seu navegador.');
+      
+      setNewModel('');
+      setNewDate('');
+      setNewClientName('');
+      setNewWhatsapp('');
+      setIsAdding(false);
+      setActiveTab('active');
+      localStorage.setItem('quadricycles_backup', JSON.stringify([newQuad, ...quads]));
     }
   };
 
