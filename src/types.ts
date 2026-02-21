@@ -4,6 +4,9 @@ export interface Review {
   scheduledDate: string;
   isCompleted: boolean;
   daysFromPrevious: number;
+  observation?: string;
+  responsible?: string;
+  km?: string;
 }
 
 export interface Quadricycle {
@@ -13,4 +16,5 @@ export interface Quadricycle {
   clientName: string;
   whatsapp: string;
   reviews: Review[];
+  status: 'active' | 'completed';
 }
