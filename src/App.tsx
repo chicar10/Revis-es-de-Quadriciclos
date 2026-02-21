@@ -4,6 +4,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Quadricycle, Review } from './types';
 import { calculateReviews, formatDate, getStatus } from './utils/dateUtils';
 
+import { dataService } from './services/dataService';
+
 export default function App() {
   const [quads, setQuads] = useState<Quadricycle[]>([]);
   const [isAdding, setIsAdding] = useState(false);
@@ -22,32 +24,16 @@ export default function App() {
   const [tempResponsible, setTempResponsible] = useState('');
   const [tempKm, setTempKm] = useState('');
 
-  // Load from API
-  const fetchQuads = async () => {
-    try {
-      setIsLoading(true);
-      const response = await fetch('/api/quadricycles');
-      if (response.ok) {
-        const data = await response.json();
-        setQuads(data);
-        // Sync to local storage as backup
-        localStorage.setItem('quadricycles_backup', JSON.stringify(data));
-      } else {
-        throw new Error('API returned ' + response.status);
-      }
-    } catch (error) {
-      console.error('Failed to fetch data from API, trying backup:', error);
-      const saved = localStorage.getItem('quadricycles_backup');
-      if (saved) {
-        setQuads(JSON.parse(saved));
-      }
-    } finally {
-      setIsLoading(false);
-    }
+  // Load data
+  const loadData = async () => {
+    setIsLoading(true);
+    const data = await dataService.getAll();
+    setQuads(data);
+    setIsLoading(false);
   };
 
   useEffect(() => {
-    fetchQuads();
+    loadData();
   }, []);
 
   const handleAdd = async (e: React.FormEvent) => {
@@ -68,43 +54,15 @@ export default function App() {
       status: 'active',
     };
 
-    // Optimistic update
-    const previousQuads = [...quads];
-    setQuads([newQuad, ...quads]);
-
-    try {
-      const response = await fetch('/api/quadricycles', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newQuad),
-      });
-
-      if (response.ok) {
-        setNewModel('');
-        setNewDate('');
-        setNewClientName('');
-        setNewWhatsapp('');
-        setIsAdding(false);
-        setActiveTab('active');
-        // Update backup
-        localStorage.setItem('quadricycles_backup', JSON.stringify([newQuad, ...quads]));
-      } else {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Erro no servidor');
-      }
-    } catch (error: any) {
-      console.error('Failed to add quadricycle:', error);
-      // Rollback optimistic update if it's a real failure
-      // But for now, let's just warn the user that it might not have saved to the cloud
-      alert('Aviso: Não foi possível salvar no banco de dados central (' + error.message + '). O registro foi salvo temporariamente no seu navegador.');
-      
+    const success = await dataService.save(newQuad);
+    if (success) {
+      setQuads([newQuad, ...quads]);
       setNewModel('');
       setNewDate('');
       setNewClientName('');
       setNewWhatsapp('');
       setIsAdding(false);
       setActiveTab('active');
-      localStorage.setItem('quadricycles_backup', JSON.stringify([newQuad, ...quads]));
     }
   };
 
@@ -125,41 +83,30 @@ export default function App() {
     e.preventDefault();
     if (!completingReview) return;
 
-    try {
-      const response = await fetch(`/api/quadricycles/${completingReview.quadId}/reviews/${completingReview.reviewId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          isCompleted: true,
-          isRefused: false,
-          observation: tempObservation,
-          responsible: tempResponsible,
-          km: tempKm
-        }),
-      });
+    const updateData = {
+      isCompleted: true,
+      isRefused: false,
+      observation: tempObservation,
+      responsible: tempResponsible,
+      km: tempKm
+    };
 
-      if (response.ok) {
-        setQuads(quads.map(q => {
-          if (q.id === completingReview.quadId) {
-            return {
-              ...q,
-              reviews: q.reviews.map(r => 
-                r.id === completingReview.reviewId 
-                  ? { ...r, isCompleted: true, isRefused: false, observation: tempObservation, responsible: tempResponsible, km: tempKm } 
-                  : r
-              )
-            };
-          }
-          return q;
-        }));
-        setCompletingReview(null);
-      } else {
-        const errorData = await response.json();
-        alert('Erro ao concluir revisão: ' + (errorData.error || 'Erro desconhecido'));
-      }
-    } catch (error: any) {
-      console.error('Failed to complete review:', error);
-      alert('Erro de conexão ao concluir revisão.');
+    const success = await dataService.updateReview(completingReview.quadId, completingReview.reviewId, updateData);
+    if (success) {
+      setQuads(quads.map(q => {
+        if (q.id === completingReview.quadId) {
+          return {
+            ...q,
+            reviews: q.reviews.map(r => 
+              r.id === completingReview.reviewId 
+                ? { ...r, ...updateData } 
+                : r
+            )
+          };
+        }
+        return q;
+      }));
+      setCompletingReview(null);
     }
   };
 
@@ -167,140 +114,79 @@ export default function App() {
     e.preventDefault();
     if (!refusingReview) return;
 
-    try {
-      const response = await fetch(`/api/quadricycles/${refusingReview.quadId}/reviews/${refusingReview.reviewId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          isCompleted: false,
-          isRefused: true,
-          refusalReason: tempRefusalReason,
-          responsible: tempResponsible
-        }),
-      });
+    const updateData = {
+      isCompleted: false,
+      isRefused: true,
+      refusalReason: tempRefusalReason,
+      responsible: tempResponsible
+    };
 
-      if (response.ok) {
-        setQuads(quads.map(q => {
-          if (q.id === refusingReview.quadId) {
-            return {
-              ...q,
-              reviews: q.reviews.map(r => 
-                r.id === refusingReview.reviewId 
-                  ? { ...r, isCompleted: false, isRefused: true, refusalReason: tempRefusalReason, responsible: tempResponsible } 
-                  : r
-              )
-            };
-          }
-          return q;
-        }));
-        setRefusingReview(null);
-      } else {
-        const errorData = await response.json();
-        alert('Erro ao recusar revisão: ' + (errorData.error || 'Erro desconhecido'));
-      }
-    } catch (error: any) {
-      console.error('Failed to refuse review:', error);
-      alert('Erro de conexão ao recusar revisão.');
+    const success = await dataService.updateReview(refusingReview.quadId, refusingReview.reviewId, updateData);
+    if (success) {
+      setQuads(quads.map(q => {
+        if (q.id === refusingReview.quadId) {
+          return {
+            ...q,
+            reviews: q.reviews.map(r => 
+              r.id === refusingReview.reviewId 
+                ? { ...r, ...updateData } 
+                : r
+            )
+          };
+        }
+        return q;
+      }));
+      setRefusingReview(null);
     }
   };
 
   const toggleReviewOff = async (quadId: string, reviewId: number) => {
-    try {
-      const response = await fetch(`/api/quadricycles/${quadId}/reviews/${reviewId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          isCompleted: false,
-          isRefused: false,
-          observation: null,
-          refusalReason: null,
-          responsible: null,
-          km: null
-        }),
-      });
+    const updateData = {
+      isCompleted: false,
+      isRefused: false,
+      observation: undefined,
+      refusalReason: undefined,
+      responsible: undefined,
+      km: undefined
+    };
 
-      if (response.ok) {
-        setQuads(quads.map(q => {
-          if (q.id === quadId) {
-            return {
-              ...q,
-              reviews: q.reviews.map(r => 
-                r.id === reviewId ? { ...r, isCompleted: false, isRefused: false, observation: undefined, refusalReason: undefined, responsible: undefined, km: undefined } : r
-              )
-            };
-          }
-          return q;
-        }));
-      } else {
-        const errorData = await response.json();
-        alert('Erro ao desfazer revisão: ' + (errorData.error || 'Erro desconhecido'));
-      }
-    } catch (error: any) {
-      console.error('Failed to toggle review off:', error);
-      alert('Erro de conexão ao desfazer revisão.');
+    const success = await dataService.updateReview(quadId, reviewId, updateData);
+    if (success) {
+      setQuads(quads.map(q => {
+        if (q.id === quadId) {
+          return {
+            ...q,
+            reviews: q.reviews.map(r => r.id === reviewId ? { ...r, ...updateData } : r)
+          };
+        }
+        return q;
+      }));
     }
   };
 
   const finalizeCycle = async (id: string) => {
     if (confirm('Deseja finalizar o ciclo de revisões deste veículo e movê-lo para o histórico?')) {
-      try {
-        const response = await fetch(`/api/quadricycles/${id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status: 'completed' }),
-        });
-
-        if (response.ok) {
-          setQuads(quads.map(q => q.id === id ? { ...q, status: 'completed' } : q));
-          setActiveTab('completed');
-        } else {
-          const errorData = await response.json();
-          alert('Erro ao finalizar ciclo: ' + (errorData.error || 'Erro desconhecido'));
-        }
-      } catch (error: any) {
-        console.error('Failed to finalize cycle:', error);
-        alert('Erro de conexão ao finalizar ciclo.');
+      const success = await dataService.updateStatus(id, 'completed');
+      if (success) {
+        setQuads(quads.map(q => q.id === id ? { ...q, status: 'completed' } : q));
+        setActiveTab('completed');
       }
     }
   };
 
   const reactivateCycle = async (id: string) => {
-    try {
-      const response = await fetch(`/api/quadricycles/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'active' }),
-      });
-
-      if (response.ok) {
-        setQuads(quads.map(q => q.id === id ? { ...q, status: 'active' } : q));
-        setActiveTab('active');
-      } else {
-        const errorData = await response.json();
-        alert('Erro ao reativar ciclo: ' + (errorData.error || 'Erro desconhecido'));
-      }
-    } catch (error: any) {
-      console.error('Failed to reactivate cycle:', error);
-      alert('Erro de conexão ao reativar ciclo.');
+    const success = await dataService.updateStatus(id, 'active');
+    if (success) {
+      setQuads(quads.map(q => q.id === id ? { ...q, status: 'active' } : q));
+      setActiveTab('active');
     }
   };
 
   const deleteQuad = async (id: string) => {
     if (confirm('Tem certeza que deseja remover permanentemente este registro?')) {
-      try {
-        const response = await fetch(`/api/quadricycles/${id}`, {
-          method: 'DELETE',
-        });
-
-        if (response.ok) {
-          setQuads(quads.filter(q => q.id !== id));
-        } else {
-          const errorData = await response.json();
-          alert('Erro ao excluir registro: ' + (errorData.error || 'Erro desconhecido'));
-        }
-      } catch (error: any) {
-        console.error('Failed to delete quadricycle:', error);
-        alert('Erro de conexão ao excluir registro.');
+      const success = await dataService.delete(id);
+      if (success) {
+        setQuads(quads.filter(q => q.id !== id));
       }
     }
   };
