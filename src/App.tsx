@@ -46,8 +46,12 @@ export default function App() {
     e.preventDefault();
     if (!newModel || !newDate || !newClientName || !newWhatsapp) return;
 
+    const id = typeof crypto.randomUUID === 'function' 
+      ? crypto.randomUUID() 
+      : Math.random().toString(36).substring(2) + Date.now().toString(36);
+
     const newQuad: Quadricycle = {
-      id: crypto.randomUUID(),
+      id,
       model: newModel,
       purchaseDate: newDate,
       clientName: newClientName,
@@ -57,6 +61,7 @@ export default function App() {
     };
 
     try {
+      console.log('Sending new quad to API:', newQuad);
       const response = await fetch('/api/quadricycles', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -71,9 +76,14 @@ export default function App() {
         setNewWhatsapp('');
         setIsAdding(false);
         setActiveTab('active');
+      } else {
+        const errorData = await response.json();
+        console.error('API error:', errorData);
+        alert('Erro ao salvar: ' + (errorData.error || 'Erro desconhecido'));
       }
     } catch (error) {
       console.error('Failed to add quadricycle:', error);
+      alert('Erro de conexão ao salvar registro.');
     }
   };
 
