@@ -5,6 +5,29 @@ import { supabase } from '../lib/supabase';
 const LS_KEY = 'quadricycles_data';
 
 export const dataService = {
+  async uploadPhoto(file: File): Promise<string | null> {
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Math.random().toString(36).substring(2)}-${Date.now()}.${fileExt}`;
+      const filePath = `fotos/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('revisoes_fotos')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data } = supabase.storage
+        .from('revisoes_fotos')
+        .getPublicUrl(filePath);
+
+      return data.publicUrl;
+    } catch (e) {
+      console.error('Erro ao fazer upload da foto:', e);
+      return null;
+    }
+  },
+
   async getAll(): Promise<Quadricycle[]> {
     try {
       // Busca quadriciclos
@@ -30,6 +53,7 @@ export const dataService = {
           purchaseDate: q.data_compra,
           clientName: q.cliente,
           whatsapp: q.whatsapp,
+          registrationResponsible: q.responsavel_registro,
           status: q.status,
           reviews: (reviews || []).map(r => ({
             id: r.numero_revisao,
@@ -41,7 +65,9 @@ export const dataService = {
             observation: r.observacao,
             refusalReason: r.motivo_recusa,
             responsible: r.responsavel,
-            km: r.km
+            km: r.km,
+            photoUrl: r.foto_url,
+            completionDate: r.data_conclusao
           }))
         };
       }));
@@ -66,6 +92,7 @@ export const dataService = {
           data_compra: quad.purchaseDate,
           cliente: quad.clientName,
           whatsapp: quad.whatsapp,
+          responsavel_registro: quad.registrationResponsible,
           status: quad.status
         }]);
 
@@ -142,6 +169,8 @@ export const dataService = {
       if (data.refusalReason !== undefined) updatePayload.motivo_recusa = data.refusalReason;
       if (data.responsible !== undefined) updatePayload.responsavel = data.responsible;
       if (data.km !== undefined) updatePayload.km = data.km;
+      if (data.photoUrl !== undefined) updatePayload.foto_url = data.photoUrl;
+      if (data.completionDate !== undefined) updatePayload.data_conclusao = data.completionDate;
 
       const { error } = await supabase
         .from('revisoes')

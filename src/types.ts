@@ -9,6 +9,8 @@ export interface Review {
   refusalReason?: string;
   responsible?: string;
   km?: string;
+  photoUrl?: string;
+  completionDate?: string;
 }
 
 export interface Quadricycle {
@@ -17,6 +19,7 @@ export interface Quadricycle {
   purchaseDate: string;
   clientName: string;
   whatsapp: string;
+  registrationResponsible?: string;
   reviews: Review[];
   status: 'active' | 'completed';
 }

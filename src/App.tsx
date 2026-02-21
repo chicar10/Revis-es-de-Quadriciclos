@@ -14,6 +14,7 @@ export default function App() {
   const [newDate, setNewDate] = useState('');
   const [newClientName, setNewClientName] = useState('');
   const [newWhatsapp, setNewWhatsapp] = useState('');
+  const [newRegistrationResponsible, setNewRegistrationResponsible] = useState('');
   const [isLoading, setIsLoading] = useState(true);
 
   // Review completion modal state
@@ -23,6 +24,8 @@ export default function App() {
   const [tempRefusalReason, setTempRefusalReason] = useState('');
   const [tempResponsible, setTempResponsible] = useState('');
   const [tempKm, setTempKm] = useState('');
+  const [tempPhoto, setTempPhoto] = useState<File | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   // Load data
   const loadData = async () => {
@@ -38,7 +41,7 @@ export default function App() {
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newModel || !newDate || !newClientName || !newWhatsapp) return;
+    if (!newModel || !newDate || !newClientName || !newWhatsapp || !newRegistrationResponsible) return;
 
     const id = typeof crypto.randomUUID === 'function' 
       ? crypto.randomUUID() 
@@ -50,6 +53,7 @@ export default function App() {
       purchaseDate: newDate,
       clientName: newClientName,
       whatsapp: newWhatsapp.replace(/\D/g, ''),
+      registrationResponsible: newRegistrationResponsible,
       reviews: calculateReviews(newDate),
       status: 'active',
     };
@@ -61,6 +65,7 @@ export default function App() {
       setNewDate('');
       setNewClientName('');
       setNewWhatsapp('');
+      setNewRegistrationResponsible('');
       setIsAdding(false);
       setActiveTab('active');
     }
@@ -71,24 +76,34 @@ export default function App() {
     setTempObservation('');
     setTempResponsible('');
     setTempKm('');
+    setTempPhoto(null);
   };
 
   const startRefusingReview = (quadId: string, reviewId: number) => {
     setRefusingReview({ quadId, reviewId });
     setTempRefusalReason('');
     setTempResponsible('');
+    setTempPhoto(null);
   };
 
   const handleCompleteReview = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!completingReview) return;
 
+    setIsProcessing(true);
+    let photoUrl = undefined;
+    if (tempPhoto) {
+      photoUrl = await dataService.uploadPhoto(tempPhoto) || undefined;
+    }
+
     const updateData = {
       isCompleted: true,
       isRefused: false,
       observation: tempObservation,
       responsible: tempResponsible,
-      km: tempKm
+      km: tempKm,
+      photoUrl,
+      completionDate: new Date().toISOString()
     };
 
     const success = await dataService.updateReview(completingReview.quadId, completingReview.reviewId, updateData);
@@ -108,17 +123,26 @@ export default function App() {
       }));
       setCompletingReview(null);
     }
+    setIsProcessing(false);
   };
 
   const handleRefuseReview = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!refusingReview) return;
 
+    setIsProcessing(true);
+    let photoUrl = undefined;
+    if (tempPhoto) {
+      photoUrl = await dataService.uploadPhoto(tempPhoto) || undefined;
+    }
+
     const updateData = {
       isCompleted: false,
       isRefused: true,
       refusalReason: tempRefusalReason,
-      responsible: tempResponsible
+      responsible: tempResponsible,
+      photoUrl,
+      completionDate: new Date().toISOString()
     };
 
     const success = await dataService.updateReview(refusingReview.quadId, refusingReview.reviewId, updateData);
@@ -138,6 +162,7 @@ export default function App() {
       }));
       setRefusingReview(null);
     }
+    setIsProcessing(false);
   };
 
   const toggleReviewOff = async (quadId: string, reviewId: number) => {
@@ -294,6 +319,20 @@ export default function App() {
                     </div>
                   </div>
 
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-1.5 flex items-center gap-2">
+                      <User className="w-4 h-4 text-indigo-500" /> Responsável pelo Registro
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={newRegistrationResponsible}
+                      onChange={(e) => setNewRegistrationResponsible(e.target.value)}
+                      placeholder="Nome do responsável pelo cadastro"
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
+                    />
+                  </div>
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-semibold text-slate-700 mb-1.5 flex items-center gap-2">
@@ -379,6 +418,15 @@ export default function App() {
                     />
                   </div>
                   <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-1.5">Anexar Foto</label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => setTempPhoto(e.target.files?.[0] || null)}
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all file:mr-4 file:py-1 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
+                    />
+                  </div>
+                  <div>
                     <label className="block text-sm font-semibold text-slate-700 mb-1.5">Observações (Opcional)</label>
                     <textarea
                       value={tempObservation}
@@ -393,14 +441,16 @@ export default function App() {
                       type="button"
                       onClick={() => setCompletingReview(null)}
                       className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 transition-all font-semibold text-slate-600"
+                      disabled={isProcessing}
                     >
                       Cancelar
                     </button>
                     <button
                       type="submit"
-                      className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl transition-all shadow-md font-semibold"
+                      className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl transition-all shadow-md font-semibold disabled:opacity-50"
+                      disabled={isProcessing}
                     >
-                      Confirmar
+                      {isProcessing ? 'Processando...' : 'Confirmar'}
                     </button>
                   </div>
                 </form>
@@ -434,6 +484,15 @@ export default function App() {
                     />
                   </div>
                   <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-1.5">Anexar Foto</label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => setTempPhoto(e.target.files?.[0] || null)}
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all file:mr-4 file:py-1 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-rose-50 file:text-rose-700 hover:file:bg-rose-100"
+                    />
+                  </div>
+                  <div>
                     <label className="block text-sm font-semibold text-slate-700 mb-1.5">Motivo da Recusa</label>
                     <textarea
                       required
@@ -449,14 +508,16 @@ export default function App() {
                       type="button"
                       onClick={() => setRefusingReview(null)}
                       className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 transition-all font-semibold text-slate-600"
+                      disabled={isProcessing}
                     >
                       Cancelar
                     </button>
                     <button
                       type="submit"
-                      className="flex-1 bg-rose-600 hover:bg-rose-700 text-white px-4 py-2.5 rounded-xl transition-all shadow-md font-semibold"
+                      className="flex-1 bg-rose-600 hover:bg-rose-700 text-white px-4 py-2.5 rounded-xl transition-all shadow-md font-semibold disabled:opacity-50"
+                      disabled={isProcessing}
                     >
-                      Confirmar Recusa
+                      {isProcessing ? 'Processando...' : 'Confirmar Recusa'}
                     </button>
                   </div>
                 </form>
@@ -532,6 +593,11 @@ export default function App() {
                           <span className="flex items-center gap-1.5 font-medium text-slate-700">
                             <User className="w-3.5 h-3.5" /> {quad.clientName}
                           </span>
+                          {quad.registrationResponsible && (
+                            <span className="flex items-center gap-1.5">
+                              <User className="w-3.5 h-3.5" /> Resp: {quad.registrationResponsible}
+                            </span>
+                          )}
                           <span className="flex items-center gap-1.5">
                             <Calendar className="w-3.5 h-3.5" /> Compra: {formatDate(quad.purchaseDate)}
                           </span>
@@ -631,6 +697,29 @@ export default function App() {
                                   <div className={`text-[10px] ${review.isCompleted ? 'text-emerald-700' : 'text-rose-700'}`}>
                                     <span className="font-bold uppercase opacity-60">Responsável:</span>
                                     <p className="font-semibold">{review.responsible}</p>
+                                  </div>
+                                )}
+                                {review.completionDate && (
+                                  <div className={`text-[10px] ${review.isCompleted ? 'text-emerald-700' : 'text-rose-700'}`}>
+                                    <span className="font-bold uppercase opacity-60">Data:</span>
+                                    <p className="font-semibold">{formatDate(review.completionDate)}</p>
+                                  </div>
+                                )}
+                                {review.photoUrl && (
+                                  <div className="mt-2">
+                                    <a 
+                                      href={review.photoUrl} 
+                                      target="_blank" 
+                                      rel="noreferrer"
+                                      className="block overflow-hidden rounded-lg border border-slate-200 hover:border-indigo-300 transition-colors"
+                                    >
+                                      <img 
+                                        src={review.photoUrl} 
+                                        alt="Foto da revisão" 
+                                        className="w-full h-24 object-cover"
+                                        referrerPolicy="no-referrer"
+                                      />
+                                    </a>
                                   </div>
                                 )}
                                 {review.km && review.isCompleted && (
