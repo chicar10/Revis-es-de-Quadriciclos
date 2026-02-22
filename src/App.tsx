@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Calendar, CheckCircle2, AlertCircle, Trash2, Bike, MessageCircle, User, Phone } from 'lucide-react';
+import { Plus, Calendar, CheckCircle2, AlertCircle, Trash2, Bike, MessageCircle, User, Phone, Pencil } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Quadricycle, Review } from './types';
 import { calculateReviews, formatDate, getStatus } from './utils/dateUtils';
@@ -15,6 +15,7 @@ export default function App() {
   const [newClientName, setNewClientName] = useState('');
   const [newWhatsapp, setNewWhatsapp] = useState('');
   const [newRegistrationResponsible, setNewRegistrationResponsible] = useState('');
+  const [editingQuad, setEditingQuad] = useState<Quadricycle | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   // Review completion modal state
@@ -68,6 +69,24 @@ export default function App() {
       setNewRegistrationResponsible('');
       setIsAdding(false);
       setActiveTab('active');
+    }
+  };
+
+  const handleEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingQuad) return;
+
+    const success = await dataService.updateQuad(editingQuad.id, {
+      model: editingQuad.model,
+      purchaseDate: editingQuad.purchaseDate,
+      clientName: editingQuad.clientName,
+      whatsapp: editingQuad.whatsapp.replace(/\D/g, ''),
+      registrationResponsible: editingQuad.registrationResponsible,
+    });
+
+    if (success) {
+      setQuads(quads.map(q => q.id === editingQuad.id ? editingQuad : q));
+      setEditingQuad(null);
     }
   };
 
@@ -230,7 +249,9 @@ export default function App() {
     window.open(`https://wa.me/55${phone}?text=${encodedMessage}`, '_blank');
   };
 
-  const filteredQuads = quads.filter(q => q.status === activeTab);
+  const activeCount = quads.filter(q => (q.status || 'active') === 'active').length;
+  const completedCount = quads.filter(q => q.status === 'completed').length;
+  const filteredQuads = quads.filter(q => (q.status || 'active') === activeTab);
 
   return (
     <div className="min-h-screen bg-[#f5f5f5] text-slate-900 font-sans p-4 md:p-8">
@@ -263,7 +284,7 @@ export default function App() {
                 : 'text-slate-500 hover:bg-slate-50'
             }`}
           >
-            Em Acompanhamento ({quads.filter(q => q.status === 'active').length})
+            Em Acompanhamento ({activeCount})
           </button>
           <button
             onClick={() => setActiveTab('completed')}
@@ -273,11 +294,113 @@ export default function App() {
                 : 'text-slate-500 hover:bg-slate-50'
             }`}
           >
-            Ciclos Concluídos ({quads.filter(q => q.status === 'completed').length})
+            Ciclos Concluídos ({completedCount})
           </button>
         </div>
 
-        {/* Add Form Modal */}
+        {/* Edit Form Modal */}
+        <AnimatePresence>
+          {editingQuad && (
+            <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-lg"
+              >
+                <h2 className="text-2xl font-bold mb-6 text-slate-900">Editar Registro</h2>
+                <form onSubmit={handleEdit} className="space-y-5">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 mb-1.5 flex items-center gap-2">
+                        <User className="w-4 h-4 text-indigo-500" /> Nome do Cliente
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={editingQuad.clientName}
+                        onChange={(e) => setEditingQuad({ ...editingQuad, clientName: e.target.value })}
+                        placeholder="Nome completo"
+                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 mb-1.5 flex items-center gap-2">
+                        <Phone className="w-4 h-4 text-indigo-500" /> WhatsApp
+                      </label>
+                      <input
+                        type="tel"
+                        required
+                        value={editingQuad.whatsapp}
+                        onChange={(e) => setEditingQuad({ ...editingQuad, whatsapp: e.target.value })}
+                        placeholder="(00) 00000-0000"
+                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-1.5 flex items-center gap-2">
+                      <User className="w-4 h-4 text-indigo-500" /> Responsável pelo Registro
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={editingQuad.registrationResponsible || ''}
+                      onChange={(e) => setEditingQuad({ ...editingQuad, registrationResponsible: e.target.value })}
+                      placeholder="Nome do responsável pelo cadastro"
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 mb-1.5 flex items-center gap-2">
+                        <Bike className="w-4 h-4 text-indigo-500" /> Modelo do Veículo
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={editingQuad.model}
+                        onChange={(e) => setEditingQuad({ ...editingQuad, model: e.target.value })}
+                        placeholder="Ex: Honda TRX 420"
+                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 mb-1.5 flex items-center gap-2">
+                        <Calendar className="w-4 h-4 text-indigo-500" /> Data da Compra
+                      </label>
+                      <input
+                        type="date"
+                        required
+                        value={editingQuad.purchaseDate}
+                        onChange={(e) => setEditingQuad({ ...editingQuad, purchaseDate: e.target.value })}
+                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3 pt-4">
+                    <button
+                      type="button"
+                      onClick={() => setEditingQuad(null)}
+                      className="flex-1 px-4 py-3 rounded-xl border border-slate-200 hover:bg-slate-50 transition-all font-semibold text-slate-600"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="submit"
+                      className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-3 rounded-xl transition-all shadow-md font-semibold"
+                    >
+                      Atualizar Registro
+                    </button>
+                  </div>
+                </form>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
         <AnimatePresence>
           {isAdding && (
             <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -632,6 +755,13 @@ export default function App() {
                           Reativar
                         </button>
                       )}
+                      <button
+                        onClick={() => setEditingQuad(quad)}
+                        className="p-2.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all"
+                        title="Editar Registro"
+                      >
+                        <Pencil className="w-5 h-5" />
+                      </button>
                       <button
                         onClick={() => deleteQuad(quad.id)}
                         className="p-2.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"

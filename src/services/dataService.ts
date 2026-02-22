@@ -54,7 +54,7 @@ export const dataService = {
           clientName: q.cliente,
           whatsapp: q.whatsapp,
           registrationResponsible: q.responsavel_registro,
-          status: q.status,
+          status: q.status || 'active',
           reviews: (reviews || []).map(r => ({
             id: r.numero_revisao,
             label: r.rotulo,
@@ -137,6 +137,31 @@ export const dataService = {
       console.warn('Falha ao atualizar status:', e);
       const current = await this.getAll();
       const updated = current.map(q => q.id === id ? { ...q, status } : q);
+      localStorage.setItem(LS_KEY, JSON.stringify(updated));
+      return true;
+    }
+  },
+
+  async updateQuad(id: string, data: Partial<Quadricycle>): Promise<boolean> {
+    try {
+      const updatePayload: any = {};
+      if (data.model !== undefined) updatePayload.modelo = data.model;
+      if (data.purchaseDate !== undefined) updatePayload.data_compra = data.purchaseDate;
+      if (data.clientName !== undefined) updatePayload.cliente = data.clientName;
+      if (data.whatsapp !== undefined) updatePayload.whatsapp = data.whatsapp;
+      if (data.registrationResponsible !== undefined) updatePayload.responsavel_registro = data.registrationResponsible;
+
+      const { error } = await supabase
+        .from('quadriciclos')
+        .update(updatePayload)
+        .eq('id', id);
+
+      if (error) throw error;
+      return true;
+    } catch (e) {
+      console.warn('Falha ao atualizar quadriciclo:', e);
+      const current = await this.getAll();
+      const updated = current.map(q => q.id === id ? { ...q, ...data } : q);
       localStorage.setItem(LS_KEY, JSON.stringify(updated));
       return true;
     }
