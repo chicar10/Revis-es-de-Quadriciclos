@@ -76,18 +76,39 @@ export default function App() {
     e.preventDefault();
     if (!editingQuad) return;
 
-    const success = await dataService.updateQuad(editingQuad.id, {
-      model: editingQuad.model,
-      purchaseDate: editingQuad.purchaseDate,
-      clientName: editingQuad.clientName,
-      whatsapp: editingQuad.whatsapp.replace(/\D/g, ''),
-      registrationResponsible: editingQuad.registrationResponsible,
+    const originalQuad = quads.find(q => q.id === editingQuad.id);
+    let updatedQuad = { ...editingQuad };
+
+    // Se a data de compra mudou, pergunta se quer recalcular as revisões
+    if (originalQuad && originalQuad.purchaseDate !== editingQuad.purchaseDate) {
+      if (confirm('A data de compra foi alterada. Deseja recalcular as datas de todas as revisões para este novo período?')) {
+        updatedQuad.reviews = calculateReviews(editingQuad.purchaseDate);
+      }
+    }
+
+    setIsProcessing(true);
+    const success = await dataService.updateQuad(updatedQuad.id, {
+      model: updatedQuad.model,
+      purchaseDate: updatedQuad.purchaseDate,
+      clientName: updatedQuad.clientName,
+      whatsapp: updatedQuad.whatsapp.replace(/\D/g, ''),
+      registrationResponsible: updatedQuad.registrationResponsible,
     });
 
     if (success) {
-      setQuads(quads.map(q => q.id === editingQuad.id ? editingQuad : q));
+      // Se as revisões mudaram (recalculadas), precisamos atualizar elas também no banco
+      if (JSON.stringify(originalQuad?.reviews) !== JSON.stringify(updatedQuad.reviews)) {
+        // Remove revisões antigas e insere novas (ou atualiza)
+        // Para simplificar e garantir sincronia, vamos recarregar tudo
+        await loadData();
+      } else {
+        setQuads(quads.map(q => q.id === updatedQuad.id ? updatedQuad : q));
+      }
       setEditingQuad(null);
+      // Força uma recarga para garantir que os contadores e dados estejam 100% sincronizados
+      await loadData();
     }
+    setIsProcessing(false);
   };
 
   const startCompletingReview = (quadId: string, reviewId: number) => {
@@ -249,9 +270,20 @@ export default function App() {
     window.open(`https://wa.me/55${phone}?text=${encodedMessage}`, '_blank');
   };
 
-  const activeCount = quads.filter(q => (q.status || 'active') === 'active').length;
-  const completedCount = quads.filter(q => q.status === 'completed').length;
-  const filteredQuads = quads.filter(q => (q.status || 'active') === activeTab);
+  const activeCount = quads.filter(q => {
+    const s = (q.status || 'active').toLowerCase().trim();
+    return s === 'active';
+  }).length;
+
+  const completedCount = quads.filter(q => {
+    const s = (q.status || 'active').toLowerCase().trim();
+    return s === 'completed';
+  }).length;
+
+  const filteredQuads = quads.filter(q => {
+    const s = (q.status || 'active').toLowerCase().trim();
+    return s === activeTab;
+  });
 
   return (
     <div className="min-h-screen bg-[#f5f5f5] text-slate-900 font-sans p-4 md:p-8">
