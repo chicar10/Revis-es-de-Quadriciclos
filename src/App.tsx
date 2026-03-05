@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Calendar, CheckCircle2, AlertCircle, Trash2, Bike, MessageCircle, User, Phone, Pencil } from 'lucide-react';
+import { Plus, Calendar, CheckCircle2, AlertCircle, Trash2, Bike, MessageCircle, User, Phone, Pencil, Search, Filter, Hash } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Quadricycle, Review } from './types';
 import { calculateReviews, formatDate, getStatus } from './utils/dateUtils';
@@ -14,9 +14,12 @@ export default function App() {
   const [newDate, setNewDate] = useState('');
   const [newClientName, setNewClientName] = useState('');
   const [newWhatsapp, setNewWhatsapp] = useState('');
+  const [newChassis, setNewChassis] = useState('');
   const [newRegistrationResponsible, setNewRegistrationResponsible] = useState('');
   const [editingQuad, setEditingQuad] = useState<Quadricycle | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showOverdueOnly, setShowOverdueOnly] = useState(false);
 
   // Review completion modal state
   const [completingReview, setCompletingReview] = useState<{ quadId: string, reviewId: number } | null>(null);
@@ -54,6 +57,7 @@ export default function App() {
       purchaseDate: newDate,
       clientName: newClientName,
       whatsapp: newWhatsapp.replace(/\D/g, ''),
+      chassis: newChassis,
       registrationResponsible: newRegistrationResponsible,
       reviews: calculateReviews(newDate),
       status: 'active',
@@ -66,6 +70,7 @@ export default function App() {
       setNewDate('');
       setNewClientName('');
       setNewWhatsapp('');
+      setNewChassis('');
       setNewRegistrationResponsible('');
       setIsAdding(false);
       setActiveTab('active');
@@ -92,6 +97,7 @@ export default function App() {
       purchaseDate: updatedQuad.purchaseDate,
       clientName: updatedQuad.clientName,
       whatsapp: updatedQuad.whatsapp.replace(/\D/g, ''),
+      chassis: updatedQuad.chassis,
       registrationResponsible: updatedQuad.registrationResponsible,
     });
 
@@ -282,7 +288,30 @@ export default function App() {
 
   const filteredQuads = quads.filter(q => {
     const s = (q.status || 'active').toLowerCase().trim();
-    return s === activeTab;
+    const matchesTab = s === activeTab;
+    
+    if (!matchesTab) return false;
+
+    // Search filter
+    const searchLower = searchTerm.toLowerCase();
+    const matchesSearch = 
+      q.clientName.toLowerCase().includes(searchLower) ||
+      q.model.toLowerCase().includes(searchLower) ||
+      (q.chassis && q.chassis.toLowerCase().includes(searchLower));
+
+    if (!matchesSearch) return false;
+
+    // Overdue filter (only for active tab)
+    if (activeTab === 'active' && showOverdueOnly) {
+      const hasOverdue = q.reviews.some(r => {
+        if (r.isCompleted || r.isRefused) return false;
+        const date = new Date(r.scheduledDate);
+        return date < new Date();
+      });
+      if (!hasOverdue) return false;
+    }
+
+    return true;
   });
 
   return (
@@ -306,28 +335,62 @@ export default function App() {
           </button>
         </header>
 
-        {/* Tabs */}
-        <div className="flex gap-2 mb-8 bg-white p-1.5 rounded-2xl shadow-sm border border-slate-100 w-fit">
-          <button
-            onClick={() => setActiveTab('active')}
-            className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${
-              activeTab === 'active' 
-                ? 'bg-indigo-600 text-white shadow-md' 
-                : 'text-slate-500 hover:bg-slate-50'
-            }`}
-          >
-            Em Acompanhamento ({activeCount})
-          </button>
-          <button
-            onClick={() => setActiveTab('completed')}
-            className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${
-              activeTab === 'completed' 
-                ? 'bg-indigo-600 text-white shadow-md' 
-                : 'text-slate-500 hover:bg-slate-50'
-            }`}
-          >
-            Ciclos Concluídos ({completedCount})
-          </button>
+        {/* Tabs and Search */}
+        <div className="flex flex-col md:flex-row gap-4 mb-8 items-start md:items-center justify-between">
+          <div className="flex gap-2 bg-white p-1.5 rounded-2xl shadow-sm border border-slate-100 w-fit">
+            <button
+              onClick={() => {
+                setActiveTab('active');
+                setShowOverdueOnly(false);
+              }}
+              className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${
+                activeTab === 'active' && !showOverdueOnly
+                  ? 'bg-indigo-600 text-white shadow-md' 
+                  : 'text-slate-500 hover:bg-slate-50'
+              }`}
+            >
+              Em Acompanhamento ({activeCount})
+            </button>
+            <button
+              onClick={() => {
+                setActiveTab('completed');
+                setShowOverdueOnly(false);
+              }}
+              className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${
+                activeTab === 'completed' 
+                  ? 'bg-indigo-600 text-white shadow-md' 
+                  : 'text-slate-500 hover:bg-slate-50'
+              }`}
+            >
+              Ciclos Concluídos ({completedCount})
+            </button>
+          </div>
+
+          <div className="flex flex-1 w-full md:max-w-md gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Pesquisar nome, modelo ou chassi..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-11 pr-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all bg-white shadow-sm text-sm"
+              />
+            </div>
+            {activeTab === 'active' && (
+              <button
+                onClick={() => setShowOverdueOnly(!showOverdueOnly)}
+                className={`px-4 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center gap-2 border ${
+                  showOverdueOnly
+                    ? 'bg-red-50 border-red-200 text-red-600 shadow-sm'
+                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                <AlertCircle className="w-4 h-4" />
+                Vencidas
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Edit Form Modal */}
@@ -369,6 +432,19 @@ export default function App() {
                         className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
                       />
                     </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-1.5 flex items-center gap-2">
+                      <Hash className="w-4 h-4 text-indigo-500" /> Chassi
+                    </label>
+                    <input
+                      type="text"
+                      value={editingQuad.chassis || ''}
+                      onChange={(e) => setEditingQuad({ ...editingQuad, chassis: e.target.value })}
+                      placeholder="Número do chassi"
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
+                    />
                   </div>
 
                   <div>
@@ -472,6 +548,19 @@ export default function App() {
                         className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
                       />
                     </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-1.5 flex items-center gap-2">
+                      <Hash className="w-4 h-4 text-indigo-500" /> Chassi
+                    </label>
+                    <input
+                      type="text"
+                      value={newChassis}
+                      onChange={(e) => setNewChassis(e.target.value)}
+                      placeholder="Número do chassi"
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
+                    />
                   </div>
 
                   <div>
@@ -691,17 +780,31 @@ export default function App() {
           ) : filteredQuads.length === 0 ? (
             <div className="bg-white rounded-2xl p-16 text-center border border-dashed border-slate-300">
               <div className="bg-slate-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
-                <Bike className="w-10 h-10 text-slate-300" />
+                <Search className="w-10 h-10 text-slate-300" />
               </div>
               <h3 className="text-xl font-bold text-slate-900">
-                {activeTab === 'active' ? 'Nenhum registro em acompanhamento' : 'Nenhum ciclo concluído ainda'}
+                {searchTerm || showOverdueOnly 
+                  ? 'Nenhum resultado encontrado' 
+                  : activeTab === 'active' ? 'Nenhum registro em acompanhamento' : 'Nenhum ciclo concluído ainda'}
               </h3>
               <p className="text-slate-500 mb-8 max-w-xs mx-auto">
-                {activeTab === 'active' 
-                  ? 'Cadastre o primeiro cliente e veículo para começar o monitoramento.' 
-                  : 'Quando as 3 revisões de um veículo forem finalizadas, ele aparecerá aqui.'}
+                {searchTerm || showOverdueOnly
+                  ? 'Tente ajustar os filtros ou o termo de pesquisa para encontrar o que procura.'
+                  : activeTab === 'active' 
+                    ? 'Cadastre o primeiro cliente e veículo para começar o monitoramento.' 
+                    : 'Quando as 3 revisões de um veículo forem finalizadas, ele aparecerá aqui.'}
               </p>
-              {activeTab === 'active' && (
+              {(searchTerm || showOverdueOnly) ? (
+                <button
+                  onClick={() => {
+                    setSearchTerm('');
+                    setShowOverdueOnly(false);
+                  }}
+                  className="bg-indigo-50 text-indigo-600 px-6 py-2 rounded-full font-bold hover:bg-indigo-100 transition-all"
+                >
+                  Limpar filtros
+                </button>
+              ) : activeTab === 'active' && (
                 <button
                   onClick={() => setIsAdding(true)}
                   className="bg-indigo-50 text-indigo-600 px-6 py-2 rounded-full font-bold hover:bg-indigo-100 transition-all"
@@ -748,6 +851,11 @@ export default function App() {
                           <span className="flex items-center gap-1.5 font-medium text-slate-700">
                             <User className="w-3.5 h-3.5" /> {quad.clientName}
                           </span>
+                          {quad.chassis && (
+                            <span className="flex items-center gap-1.5">
+                              <Hash className="w-3.5 h-3.5" /> {quad.chassis}
+                            </span>
+                          )}
                           {quad.registrationResponsible && (
                             <span className="flex items-center gap-1.5">
                               <User className="w-3.5 h-3.5" /> Resp: {quad.registrationResponsible}

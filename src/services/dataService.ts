@@ -53,6 +53,7 @@ export const dataService = {
           purchaseDate: q.data_compra,
           clientName: q.cliente,
           whatsapp: q.whatsapp,
+          chassis: q.chassi,
           registrationResponsible: q.responsavel_registro,
           status: q.status || 'active',
           reviews: (reviews || []).map(r => ({
@@ -92,6 +93,7 @@ export const dataService = {
           data_compra: quad.purchaseDate,
           cliente: quad.clientName,
           whatsapp: quad.whatsapp,
+          chassi: quad.chassis,
           responsavel_registro: quad.registrationResponsible,
           status: quad.status
         }]);
@@ -149,6 +151,7 @@ export const dataService = {
       if (data.purchaseDate !== undefined) updatePayload.data_compra = data.purchaseDate;
       if (data.clientName !== undefined) updatePayload.cliente = data.clientName;
       if (data.whatsapp !== undefined) updatePayload.whatsapp = data.whatsapp;
+      if (data.chassis !== undefined) updatePayload.chassi = data.chassis;
       if (data.registrationResponsible !== undefined) updatePayload.responsavel_registro = data.registrationResponsible;
 
       const { error } = await supabase

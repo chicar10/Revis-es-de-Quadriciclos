@@ -19,6 +19,7 @@ export interface Quadricycle {
   purchaseDate: string;
   clientName: string;
   whatsapp: string;
+  chassis?: string;
   registrationResponsible?: string;
   reviews: Review[];
   status: 'active' | 'completed';
