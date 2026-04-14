@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Calendar, CheckCircle2, AlertCircle, Trash2, Bike, MessageCircle, User, Phone, Pencil, Search, Filter, Hash } from 'lucide-react';
+import { Plus, Calendar, CheckCircle2, AlertCircle, Trash2, Bike, MessageCircle, User, Phone, Pencil, Search, Filter, Hash, RefreshCw, Wifi, WifiOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Quadricycle, Review } from './types';
 import { calculateReviews, formatDate, getStatus } from './utils/dateUtils';
@@ -18,6 +18,7 @@ export default function App() {
   const [newRegistrationResponsible, setNewRegistrationResponsible] = useState('');
   const [editingQuad, setEditingQuad] = useState<Quadricycle | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isOnline, setIsOnline] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [showOverdueOnly, setShowOverdueOnly] = useState(false);
 
@@ -32,15 +33,32 @@ export default function App() {
   const [isProcessing, setIsProcessing] = useState(false);
 
   // Load data
-  const loadData = async () => {
-    setIsLoading(true);
-    const data = await dataService.getAll();
-    setQuads(data);
-    setIsLoading(false);
+  const loadData = async (showLoading = true) => {
+    if (showLoading) setIsLoading(true);
+    try {
+      const data = await dataService.getAll();
+      setQuads(data);
+      setIsOnline(true);
+    } catch (error) {
+      console.error('Erro ao carregar dados:', error);
+      setIsOnline(false);
+    } finally {
+      if (showLoading) setIsLoading(false);
+    }
   };
 
   useEffect(() => {
     loadData();
+
+    // Subscribe to real-time changes
+    const unsubscribe = dataService.subscribeToChanges(() => {
+      console.log('Mudança detectada no banco de dados, recarregando...');
+      loadData(false); // Reload without full screen loading
+    });
+
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   const handleAdd = async (e: React.FormEvent) => {
@@ -326,13 +344,28 @@ export default function App() {
             </h1>
             <p className="text-slate-500 mt-1">Gerencie o cronograma e contato com clientes.</p>
           </div>
-          <button
-            onClick={() => setIsAdding(true)}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl flex items-center gap-2 transition-all shadow-md active:scale-95 font-semibold"
-          >
-            <Plus className="w-5 h-5" />
-            Novo Registro
-          </button>
+          <div className="flex items-center gap-3">
+            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold ${
+              isOnline ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'
+            }`}>
+              {isOnline ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
+              {isOnline ? 'Sincronizado' : 'Modo Offline'}
+            </div>
+            <button
+              onClick={() => loadData()}
+              className="p-2.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all"
+              title="Sincronizar Agora"
+            >
+              <RefreshCw className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} />
+            </button>
+            <button
+              onClick={() => setIsAdding(true)}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl flex items-center gap-2 transition-all shadow-md active:scale-95 font-semibold"
+            >
+              <Plus className="w-5 h-5" />
+              Novo Registro
+            </button>
+          </div>
         </header>
 
         {/* Tabs and Search */}

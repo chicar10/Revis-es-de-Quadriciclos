@@ -222,5 +222,22 @@ export const dataService = {
       localStorage.setItem(LS_KEY, JSON.stringify(updated));
       return true;
     }
+  },
+
+  subscribeToChanges(callback: () => void) {
+    const quadSubscription = supabase
+      .channel('public:quadriciclos')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'quadriciclos' }, callback)
+      .subscribe();
+
+    const reviewSubscription = supabase
+      .channel('public:revisoes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'revisoes' }, callback)
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(quadSubscription);
+      supabase.removeChannel(reviewSubscription);
+    };
   }
 };
